@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Trạm Chụp Ảnh Gương</title>
+    <title>Trạm Chụp Ảnh Gương (Đổi Cam)</title>
     <style>
         body {
             margin: 0;
@@ -32,21 +32,32 @@
             width: 100%;
             height: 100%;
             object-fit: cover;
-            /* Lật ngang video thành hiệu ứng gương */
+        }
+        /* Mặc định lật gương khi dùng cam trước */
+        .mirrored {
             transform: scaleX(-1);
         }
-        button {
+        /* Tắt lật gương khi dùng cam sau để chữ không bị ngược ngược xuôi xuôi */
+        .normal {
+            transform: scaleX(1);
+        }
+        .btn-group {
             margin-top: 15px;
-            padding: 12px 24px;
-            font-size: 16px;
+            display: flex;
+            gap: 10px;
+        }
+        button {
+            padding: 10px 18px;
+            font-size: 15px;
             font-weight: bold;
-            background: #ff4757;
             color: white;
             border: none;
-            border-radius: 25px;
+            border-radius: 20px;
             cursor: pointer;
-            box-shadow: 0 4px 10px rgba(255, 71, 87, 0.4);
+            box-shadow: 0 4px 10px rgba(0,0,0,0.3);
         }
+        #capture-btn { background: #ff4757; }
+        #switch-btn { background: #3742fa; }
         button:active { transform: scale(0.95); }
         #snapshot {
             display: none;
@@ -63,47 +74,84 @@
     <h2>Trạm Chụp Ảnh Gương</h2>
     
     <div class="camera-container">
-        <video id="webcam" autoplay playsinline muted></video>
+        <!-- Mặc định bắt đầu bằng cam trước (mirrored) -->
+        <video id="webcam" class="mirrored" autoplay playsinline muted></video>
     </div>
     
-    <button id="capture-btn">Chụp Ảnh</button>
+    <div class="btn-group">
+        <button id="switch-btn">🔄 Đổi Cam</button>
+        <button id="capture-btn">📸 Chụp Ảnh</button>
+    </div>
+    
     <canvas id="canvas" style="display:none;"></canvas>
     <img id="snapshot" alt="Ảnh đã chụp">
 
     <script>
         const video = document.getElementById('webcam');
-        const button = document.getElementById('capture-btn');
+        const captureBtn = document.getElementById('capture-btn');
+        const switchBtn = document.getElementById('switch-btn');
         const canvas = document.getElementById('canvas');
         const snapshot = document.getElementById('snapshot');
 
-        // Mở camera trước trên điện thoại
-        async function startCamera() {
+        // Biến lưu trạng thái camera hiện tại: 'user' (cam trước) hoặc 'environment' (cam sau)
+        let currentFacingMode = 'user'; 
+        let currentStream = null;
+
+        // Hàm mở camera
+        async function startCamera(facingMode) {
+            // Nếu đang mở luồng cũ thì tắt đi trước để tránh kẹt cam
+            if (currentStream) {
+                currentStream.getTracks().forEach(track => track.stop());
+            }
+
             try {
-                const stream = await navigator.mediaDevices.getUserMedia({ 
-                    video: { facingMode: "user" }, 
-                    audio: false 
-                });
-                video.srcObject = stream;
+                const constraints = {
+                    video: { facingMode: facingMode },
+                    audio: false
+                };
+                
+                currentStream = await navigator.mediaDevices.getUserMedia(constraints);
+                video.srcObject = currentStream;
+
+                // Tinh chỉnh hiển thị: Nếu là cam trước thì lật gương, cam sau thì giữ nguyên
+                if (facingMode === 'user') {
+                    video.className = 'mirrored';
+                } else {
+                    video.className = 'normal';
+                }
             } catch (err) {
-                alert("Không mở được camera! Hãy đảm bảo bạn dùng trình duyệt web và đã cấp quyền Camera.");
+                alert("Không mở được camera! Hãy đảm bảo bạn đã cấp quyền truy cập.");
                 console.error(err);
             }
         }
 
-        startCamera();
+        // Khởi động lần đầu (cam trước)
+        startCamera(currentFacingMode);
 
-        // Xử lý sự kiện bấm nút chụp ảnh
-        button.addEventListener('click', () => {
+        // Sự kiện bấm nút "Đổi Cam"
+        switchBtn.addEventListener('click', () => {
+            // Đổi qua lại giữa cam trước ('user') và cam sau ('environment')
+            currentFacingMode = (currentFacingMode === 'user') ? 'environment' : 'user';
+            startCamera(currentFacingMode);
+        });
+
+        // Sự kiện bấm nút "Chụp Ảnh"
+        captureBtn.addEventListener('click', () => {
             canvas.width = video.videoWidth;
             canvas.height = video.videoHeight;
             const ctx = canvas.getContext('2d');
 
-            // Giữ nguyên hiệu ứng lật gương khi lưu ảnh
-            ctx.translate(canvas.width, 0);
-            ctx.scale(-1, 1);
+            // Nếu đang chụp từ cam trước, giữ nguyên hiệu ứng lật gương trên ảnh lưu
+            if (currentFacingMode === 'user') {
+                ctx.translate(canvas.width, 0);
+                ctx.scale(-1, 1);
+            } else {
+                ctx.setTransform(1, 0, 0, 1, 0, 0); // Cam sau thì giữ nguyên chiều bình thường
+            }
+
             ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
 
-            // Hiện ảnh vừa chụp ra màn hình
+            // Hiển thị ảnh chụp ra màn hình
             const dataUrl = canvas.toDataURL('image/png');
             snapshot.src = dataUrl;
             snapshot.style.display = 'block';
