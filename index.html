@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Trạm Chụp Ảnh Gương Cải Tiến</title>
+    <title>Trạm Chụp Ảnh Gương - Fix Lỗi Cam Sau</title>
     <style>
         body {
             margin: 0;
@@ -33,14 +33,8 @@
             height: 100%;
             object-fit: cover;
         }
-        /* Lớp lật gương */
-        .mirrored {
-            transform: scaleX(-1);
-        }
-        /* Lớp bình thường */
-        .normal {
-            transform: scaleX(1);
-        }
+        .mirrored { transform: scaleX(-1); }
+        .normal { transform: scaleX(1); }
         .btn-group {
             margin-top: 15px;
             display: flex;
@@ -82,7 +76,7 @@
     </div>
     
     <div class="btn-group">
-        <button id="switch-btn">🔄 Đổi Cam (Trước/Sau)</button>
+        <button id="switch-btn">🔄 Đổi Cam</button>
         <button id="mirror-btn">🪞 Tắt/Bật Gương</button>
         <button id="capture-btn">📸 Chụp Ảnh</button>
     </div>
@@ -98,48 +92,67 @@
         const canvas = document.getElementById('canvas');
         const snapshot = document.getElementById('snapshot');
 
-        let useFrontCamera = true; // Mặc định cam trước
-        let isMirrored = true;     // Mặc định bật hiệu ứng gương
+        let useFrontCamera = true;
+        let isMirrored = true;
         let currentStream = null;
 
         async function startCamera() {
+            // 1. Tắt toàn bộ các luồng camera đang chạy trước đó để nhường phần cứng
             if (currentStream) {
-                currentStream.getTracks().forEach(track => track.stop());
+                currentStream.getTracks().forEach(track => {
+                    track.stop();
+                });
+                currentStream = null;
+                video.srcObject = null;
             }
 
-            // Cấu hình linh hoạt để ép điện thoại nhận diện đúng camera trước/sau
+            // 2. Thêm độ trễ nhỏ để hệ thống điện thoại kịp giải phóng cảm biến camera
+            await new Promise(resolve => setTimeout(resolve, 300));
+
             const constraints = {
                 video: {
-                    facingMode: useFrontCamera ? "user" : "environment"
+                    facingMode: useFrontCamera ? "user" : { exact: "environment" }
                 },
                 audio: false
             };
 
             try {
+                // Thử gọi với camera chính xác
                 currentStream = await navigator.mediaDevices.getUserMedia(constraints);
                 video.srcObject = currentStream;
-            } catch (err) {
-                // Dự phòng trường hợp cấu hình facingMode bị lỗi trên một số trình duyệt di động cũ
+            } catch (err1) {
+                console.warn("Không bật được chính xác hướng camera, thử cách thay thế...", err1);
                 try {
-                    currentStream = await navigator.mediaDevices.getUserMedia({ video: true, audio: false });
+                    // Dự phòng nếu máy không hỗ trợ { exact: ... }
+                    const fallbackConstraints = {
+                        video: { facingMode: useFrontCamera ? "user" : "environment" },
+                        audio: false
+                    };
+                    currentStream = await navigator.mediaDevices.getUserMedia(fallbackConstraints);
                     video.srcObject = currentStream;
-                } catch (e) {
-                    alert("Không thể mở camera. Vui lòng kiểm tra lại quyền của trình duyệt!");
-                    console.error(e);
+                } catch (err2) {
+                    try {
+                        // Dự phòng cuối: lấy bất kỳ camera nào có sẵn để không bị đen màn hình
+                        currentStream = await navigator.mediaDevices.getUserMedia({ video: true, audio: false });
+                        video.srcObject = currentStream;
+                    } catch (err3) {
+                        alert("Không thể mở camera trên thiết bị này. Hãy kiểm tra quyền truy cập!");
+                        console.error(err3);
+                    }
                 }
             }
         }
 
-        // Chạy lần đầu
+        // Khởi động lần đầu
         startCamera();
 
-        // Nút đổi cam Trước / Sau
+        // Nút đổi cam
         switchBtn.addEventListener('click', () => {
             useFrontCamera = !useFrontCamera;
             startCamera();
         });
 
-        // Nút chủ động Bật/Tắt hiệu ứng gương bất cứ lúc nào bạn muốn
+        // Nút Bật/Tắt gương
         mirrorBtn.addEventListener('click', () => {
             isMirrored = !isMirrored;
             if (isMirrored) {
@@ -151,8 +164,9 @@
             }
         });
 
-        // Nút chụp ảnh giữ nguyên trạng thái hiển thị
+        // Nút chụp ảnh
         captureBtn.addEventListener('click', () => {
+            if (!video.videoWidth) return;
             canvas.width = video.videoWidth;
             canvas.height = video.videoHeight;
             const ctx = canvas.getContext('2d');
