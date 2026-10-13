@@ -1,0 +1,114 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Trạm Chụp Ảnh Gương</title>
+    <style>
+        body {
+            margin: 0;
+            background: #111;
+            color: #fff;
+            font-family: sans-serif;
+            text-align: center;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            min-height: 100vh;
+        }
+        h2 { margin: 10px 0; font-size: 20px; }
+        .camera-container {
+            position: relative;
+            width: 90%;
+            max-width: 400px;
+            aspect-ratio: 3/4;
+            background: #000;
+            border-radius: 12px;
+            overflow: hidden;
+            box-shadow: 0 4px 15px rgba(0,0,0,0.5);
+        }
+        video {
+            width: 100%;
+            height: 100%;
+            object-fit: cover;
+            /* Lật ngang video thành hiệu ứng gương */
+            transform: scaleX(-1);
+        }
+        button {
+            margin-top: 15px;
+            padding: 12px 24px;
+            font-size: 16px;
+            font-weight: bold;
+            background: #ff4757;
+            color: white;
+            border: none;
+            border-radius: 25px;
+            cursor: pointer;
+            box-shadow: 0 4px 10px rgba(255, 71, 87, 0.4);
+        }
+        button:active { transform: scale(0.95); }
+        #snapshot {
+            display: none;
+            margin-top: 15px;
+            width: 90%;
+            max-width: 400px;
+            border-radius: 12px;
+            border: 2px solid #2ed573;
+        }
+    </style>
+</head>
+<body>
+
+    <h2>Trạm Chụp Ảnh Gương</h2>
+    
+    <div class="camera-container">
+        <video id="webcam" autoplay playsinline muted></video>
+    </div>
+    
+    <button id="capture-btn">Chụp Ảnh</button>
+    <canvas id="canvas" style="display:none;"></canvas>
+    <img id="snapshot" alt="Ảnh đã chụp">
+
+    <script>
+        const video = document.getElementById('webcam');
+        const button = document.getElementById('capture-btn');
+        const canvas = document.getElementById('canvas');
+        const snapshot = document.getElementById('snapshot');
+
+        // Mở camera trước trên điện thoại
+        async function startCamera() {
+            try {
+                const stream = await navigator.mediaDevices.getUserMedia({ 
+                    video: { facingMode: "user" }, 
+                    audio: false 
+                });
+                video.srcObject = stream;
+            } catch (err) {
+                alert("Không mở được camera! Hãy đảm bảo bạn dùng trình duyệt web và đã cấp quyền Camera.");
+                console.error(err);
+            }
+        }
+
+        startCamera();
+
+        // Xử lý sự kiện bấm nút chụp ảnh
+        button.addEventListener('click', () => {
+            canvas.width = video.videoWidth;
+            canvas.height = video.videoHeight;
+            const ctx = canvas.getContext('2d');
+
+            // Giữ nguyên hiệu ứng lật gương khi lưu ảnh
+            ctx.translate(canvas.width, 0);
+            ctx.scale(-1, 1);
+            ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
+
+            // Hiện ảnh vừa chụp ra màn hình
+            const dataUrl = canvas.toDataURL('image/png');
+            snapshot.src = dataUrl;
+            snapshot.style.display = 'block';
+        });
+    </script>
+
+</body>
+</html>
